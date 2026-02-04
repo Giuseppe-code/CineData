@@ -10,4 +10,4 @@ RUN python -m pip install --upgrade pip \
 
 COPY . /app
 
-CMD ["python", "scrapingBoxOffice.py"]
+CMD ["python", "exampleScraping.py"]

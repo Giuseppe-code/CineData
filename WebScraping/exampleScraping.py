@@ -33,7 +33,7 @@ def main():
     while True:
         for ev in BOXOFFICE_DATA:
             send_event(ev)
-            print(ev)
+            # print(ev)
             time.sleep(DELAY)
         if not LOOP:
             break

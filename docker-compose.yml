@@ -3,10 +3,10 @@ services:
     profiles: ["scraping"]
     image: fluent/fluent-bit:3.2
     container_name: fluentbit
+    ports:
+    - "9880:9880"   # opzionale: solo se vuoi mandare dall'host
     volumes:
       - ./fluentbit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
-    ports:
-      - "9880:9880"   # opzionale: solo se vuoi mandare dall'host
     networks:
       - appnet
 
@@ -14,6 +14,8 @@ services:
     profiles: ["kafka"]
     image: apache/kafka:4.0.1
     container_name: kafka
+    networks:
+        - appnet
     environment:
       KAFKA_NODE_ID: "1"
       KAFKA_PROCESS_ROLES: "broker,controller"
@@ -26,22 +28,47 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
-  
+    
   topic-creator:
-      profiles: ["kafka"]
-      image: apache/kafka:4.0.1
-      depends_on:
-        - kafka
-      entrypoint: ["/bin/bash","-lc"]
-      command: |
-        "
-        sleep 10;
-        /opt/kafka/bin/kafka-topics.sh --create --topic BoxOffice --bootstrap-server kafka:9092
-        
-        "
-  # =========================
-  # GROUP: SCRAPING
-  # =========================
+    profiles: ["kafka"]
+    image: apache/kafka:4.0.1
+    depends_on:
+      - kafka
+    networks:
+        - appnet
+    entrypoint: ["/bin/bash","-lc"]
+    command: |
+      "
+      sleep 10;
+      /opt/kafka/bin/kafka-topics.sh --create --topic topBoxOffice --bootstrap-server kafka:9092
+      
+      "
+
+  # consumer per output
+  kafka-dump:
+    profiles: ["kafka-debug"]
+    image: apache/kafka:4.0.1
+    depends_on:
+      - kafka
+    entrypoint: ["/bin/bash","-lc"]
+    command: 
+      - |
+        for i in {1..60}; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --list >/dev/null 2>&1 && break
+          echo "Waiting for Kafka..."
+          sleep 2
+        done
+        echo "Starting consumer on topic topBoxOffice..."
+        exec /opt/kafka/bin/kafka-console-consumer.sh \
+          --bootstrap-server kafka:9092 \
+          --topic topBoxOffice \
+          --from-beginning \
+          --property print.timestamp=true \
+          --property print.key=true \
+          --property print.value=true
+    networks:
+      - appnet
+
   scraping:
     profiles: ["scraping"]
     container_name: scraping

@@ -41,7 +41,8 @@ services:
       "
       sleep 10;
       /opt/kafka/bin/kafka-topics.sh --create --topic topBoxOffice --bootstrap-server kafka:9092
-      
+      /opt/kafka/bin/kafka-topics.sh --create --topic reviewFilm --bootstrap-server kafka:9092
+
       "
 
   # consumer per output
@@ -61,7 +62,7 @@ services:
         echo "Starting consumer on topic topBoxOffice..."
         exec /opt/kafka/bin/kafka-console-consumer.sh \
           --bootstrap-server kafka:9092 \
-          --topic topBoxOffice \
+          --topic reviewFilm \
           --from-beginning \
           --property print.timestamp=true \
           --property print.key=true \
@@ -75,7 +76,6 @@ services:
     build: 
       context: ./WebScraping
     environment:
-      SINK_URL: "http://fluentbit:9880/boxoffice.test"
       DELAY: "0.2"
       LOOP: "true"
     networks:

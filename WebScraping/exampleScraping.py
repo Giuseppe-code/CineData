@@ -17,7 +17,7 @@ BOXOFFICE_DATA = [
   {'pos': 10, 'titolo': "UNA BATTAGLIA DOPO L'ALTRA (ONE BATTLE AFTER ANOTHER)", 'prima_progr': '25/09/2025', 'prima_progr_iso': '2025-09-25', 'nazione': 'USA', 'distribuzione': 'WARNER BROS. ITALIA', 'incasso': 5103009.11, 'presenze': 704258, 'incasso_al': 5103009.11, 'presenze_al': 704258},
 ]
 
-SINK_URL = os.environ.get("SINK_URL", "http://fluentbit:9880/boxoffice.test")
+SINK_URL = os.environ.get("SINK_URL", "http://fluentbit:9880/topBoxOffice")
 DELAY = float(os.environ.get("DELAY", "0.2"))
 LOOP = os.environ.get("LOOP", "true").lower() in ("1", "true", "yes")
 TIMEOUT = float(os.environ.get("TIMEOUT", "5"))

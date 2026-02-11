@@ -10,4 +10,5 @@ RUN python -m pip install --upgrade pip \
 
 COPY . /app
 
-CMD ["python", "exampleScraping.py"]
+CMD ["bash", "-lc", "python exampleScraping.py & python exampleReview.py & wait"]
+

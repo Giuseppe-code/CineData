@@ -1,4 +1,15 @@
 services:
+  scraping:
+    profiles: ["scraping"]
+    container_name: scraping
+    build: 
+      context: ./WebScraping
+    environment:
+      DELAY: "0.2"
+      LOOP: "true"
+    networks:
+      - appnet
+    
   fluentbit:
     profiles: ["scraping"]
     image: fluent/fluent-bit:3.2
@@ -11,11 +22,13 @@ services:
       - appnet
 
   kafka:
-    profiles: ["kafka"]
+    profiles: ["kafka", "clk"]
     image: apache/kafka:4.0.1
     container_name: kafka
     networks:
         - appnet
+    ports:
+      - 3030:3030
     environment:
       KAFKA_NODE_ID: "1"
       KAFKA_PROCESS_ROLES: "broker,controller"
@@ -29,8 +42,22 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
     
+  kafka-ui:
+    profiles: ["kafka-ui"]
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8080:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+    networks:
+      - appnet
+
   topic-creator:
-    profiles: ["kafka"]
+    profiles: ["kafka-topic"]
     image: apache/kafka:4.0.1
     depends_on:
       - kafka
@@ -40,10 +67,32 @@ services:
     command: |
       "
       sleep 10;
-      /opt/kafka/bin/kafka-topics.sh --create --topic topBoxOffice --bootstrap-server kafka:9092
+      /opt/kafka/bin/kafka-topics.sh --create --topic topboxoffice --bootstrap-server kafka:9092
       /opt/kafka/bin/kafka-topics.sh --create --topic reviewFilm --bootstrap-server kafka:9092
+      /opt/kafka/bin/kafka-topics.sh --create --topic revisitedReview --bootstrap-server kafka:9092
 
       "
+  connect-init:
+    profiles: ["connect-init", "clk"]
+    image: curlimages/curl:8.6.0
+    depends_on:
+      - kafka-connect
+      - elasticsearch
+    environment:
+      CONNECT_URL: "http://kafka-connect:8083"
+    container_name: connect-init
+    networks:
+      - appnet
+    volumes:
+      - ./scripts/init-connector.sh:/init-connector.sh:ro
+    entrypoint: ["/bin/sh","-c"]
+    command: |
+      "
+      sleep 10;
+      /init-connector.sh
+      "
+    restart: "no"
+
 
   # consumer per output
   kafka-dump:
@@ -70,17 +119,87 @@ services:
     networks:
       - appnet
 
-  scraping:
-    profiles: ["scraping"]
-    container_name: scraping
-    build: 
-      context: ./WebScraping
+  kafka-connect:
+    profiles: ["visual", "clk"]
+    image: confluentinc/cp-kafka-connect:8.0.0
+    container_name: kafka-connect
+    platform: linux/amd64
+    depends_on:
+      - kafka
+    ports:
+      - 8083:8083
     environment:
-      DELAY: "0.2"
-      LOOP: "true"
+      KAFKA_HEAP_OPTS: "-Xms256m -Xmx512m"
+      CONNECT_BOOTSTRAP_SERVERS: "kafka:9092"
+      CONNECT_REST_PORT: 8083
+      CONNECT_GROUP_ID: kafka-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
+      CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
+      CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_INTERNAL_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+      CONNECT_REST_ADVERTISED_HOST_NAME: "kafka-connect"
+      CONNECT_LOG4J_ROOT_LOGLEVEL: "INFO"
+      CONNECT_LOG4J_LOGGERS: "org.apache.kafka.connect.runtime.rest=WARN,org.reflections=ERROR"
+      CONNECT_LOG4J_APPENDER_STDOUT_LAYOUT_CONVERSIONPATTERN: "[%d] %p %X{connector.context}%m (%c:%L)%n"
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_PLUGIN_PATH: /usr/share/java,/usr/share/confluent-hub-components,/data/connect-jars
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+    volumes:
+      - $PWD/data:/data
+    command:
+      - bash
+      - -lc
+      - |
+        echo "Installing Connector"
+        confluent-hub install --no-prompt confluentinc/kafka-connect-elasticsearch:15.1.1
+        #
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run 
+        #
+    extra_hosts:
+      - "host.docker.internal:172.17.0.1"
+    networks:
+        - appnet
+
+  elasticsearch:
+    container_name: elasticsearch
+    profiles: ["visual", "clk"]
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.1
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ENCRYPTION_KEY=c34d38b3a14956121ff2170e5030b471551370178f43e5626eec58b04a30fae2
+    depends_on:
+      - kafka
+    ports:
+      - 9200:9200
+    networks:
+        - appnet
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0' 
+
+  kibana:
+    profiles: ["visual", "clk"]
+    image: docker.elastic.co/kibana/kibana:8.15.1
+    depends_on:
+      - kafka
+    environment:
+      ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
+      NODE_OPTIONS: "--max-old-space-size=512"
+    ports: 
+      - "5601:5601"
     networks:
       - appnet
-    
 
 networks:
   appnet:

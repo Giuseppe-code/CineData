@@ -10,5 +10,10 @@ RUN python -m pip install --upgrade pip \
 
 COPY . /app
 
-CMD ["bash", "-lc", "python exampleScraping.py & python exampleReview.py & wait"]
+# Crea directory per i file cache
+RUN mkdir -p /app/cache
 
+# Definisci il volume per persistere i cache
+VOLUME ["/app/cache"]
+
+CMD ["bash", "-lc", "python main_scraper.py"]

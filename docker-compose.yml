@@ -4,9 +4,17 @@ services:
     container_name: scraping
     build: 
       context: ./WebScraping
+    volumes:
+      # Mappa la cartella locale per persistere i cache
+      - ./WebScraping/cache:/app/cache
     environment:
-      DELAY: "0.2"
-      LOOP: "true"
+      - BOXOFFICE_SINK_URL=http://fluentbit:9880/topBoxOffice
+      - REVIEWS_SINK_URL=http://fluentbit:9880/reviewFilm
+      - DELAY=0.2
+      - LOOP=false
+      - TIMEOUT=5
+    depends_on:
+      - fluentbit
     networks:
       - appnet
     

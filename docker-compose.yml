@@ -1,6 +1,6 @@
 services:
   scraping:
-    profiles: ["scraping"]
+    profiles: ["scraping","all"]
     container_name: scraping
     build: 
       context: ./WebScraping
@@ -19,18 +19,16 @@ services:
       - appnet
     
   fluentbit:
-    profiles: ["scraping"]
+    profiles: ["scraping","all"]
     image: fluent/fluent-bit:3.2
     container_name: fluentbit
-    ports:
-    - "9880:9880"   # opzionale: solo se vuoi mandare dall'host
     volumes:
       - ./fluentbit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
     networks:
       - appnet
 
   kafka:
-    profiles: ["kafka", "clk"]
+    profiles: ["kafka", "clk","all"]
     image: apache/kafka:4.0.1
     container_name: kafka
     networks:
@@ -50,6 +48,11 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: "0"
     
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2' 
+    
   kafka-ui:
     profiles: ["kafka-ui"]
     image: provectuslabs/kafka-ui:latest
@@ -65,7 +68,7 @@ services:
       - appnet
 
   topic-creator:
-    profiles: ["kafka-topic"]
+    profiles: ["kafka-topic","all"]
     image: apache/kafka:4.0.1
     depends_on:
       - kafka
@@ -77,11 +80,11 @@ services:
       sleep 10;
       /opt/kafka/bin/kafka-topics.sh --create --topic topboxoffice --bootstrap-server kafka:9092
       /opt/kafka/bin/kafka-topics.sh --create --topic reviewFilm --bootstrap-server kafka:9092
-      /opt/kafka/bin/kafka-topics.sh --create --topic revisitedReview --bootstrap-server kafka:9092
+      /opt/kafka/bin/kafka-topics.sh --create --topic revisedReview --bootstrap-server kafka:9092
 
       "
   connect-init:
-    profiles: ["connect-init", "clk"]
+    profiles: ["connect-init", "clk","all"]
     image: curlimages/curl:8.6.0
     depends_on:
       - kafka-connect
@@ -119,7 +122,7 @@ services:
         echo "Starting consumer on topic topBoxOffice..."
         exec /opt/kafka/bin/kafka-console-consumer.sh \
           --bootstrap-server kafka:9092 \
-          --topic reviewFilm \
+          --topic revisedReview \
           --from-beginning \
           --property print.timestamp=true \
           --property print.key=true \
@@ -128,7 +131,7 @@ services:
       - appnet
 
   kafka-connect:
-    profiles: ["visual", "clk"]
+    profiles: ["visual", "clk","all"]
     image: confluentinc/cp-kafka-connect:8.0.0
     container_name: kafka-connect
     platform: linux/amd64
@@ -178,13 +181,12 @@ services:
 
   elasticsearch:
     container_name: elasticsearch
-    profiles: ["visual", "clk"]
+    profiles: ["visual", "clk","all"]
     image: docker.elastic.co/elasticsearch/elasticsearch:8.15.1
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
       - ES_JAVA_OPTS=-Xms512m -Xmx512m
-      - ENCRYPTION_KEY=c34d38b3a14956121ff2170e5030b471551370178f43e5626eec58b04a30fae2
     depends_on:
       - kafka
     ports:
@@ -197,7 +199,7 @@ services:
           cpus: '1.0' 
 
   kibana:
-    profiles: ["visual", "clk"]
+    profiles: ["visual", "clk","all"]
     image: docker.elastic.co/kibana/kibana:8.15.1
     depends_on:
       - kafka
@@ -208,7 +210,43 @@ services:
       - "5601:5601"
     networks:
       - appnet
+  spark-app:
+    profiles: ["sparkText","all"]
+    image: apache/spark:4.0.2-python3
+    platform: linux/arm64
+    container_name: spark-sentiment
+    dns:
+    - 8.8.8.8
+    user: root
+    volumes:
+      - ./models/script:/app
+      - ./models/quickcheck_model:/models
+    entrypoint: ["/bin/bash", "-c"]
+    command: >
+      "
+      echo '=== Installing dependencies ===' &&
+      pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu &&
+      pip3 install --no-cache-dir transformers protobuf sentencepiece &&
+      echo '=== Done ===' &&
 
+
+      echo '=== Starting Spark ===' &&
+      /opt/spark/bin/spark-submit
+      --master local[2]
+      --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2
+      --driver-memory 1g
+      --executor-memory 1g
+      --conf spark.driver.maxResultSize=512m
+      --conf spark.sql.shuffle.partitions=2
+      /app/sentiment_analysis.py
+      "
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+    networks:
+          - appnet
+          
 networks:
   appnet:
     driver: bridge

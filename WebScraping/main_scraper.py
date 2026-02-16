@@ -3,8 +3,10 @@ import os
 import time
 import json
 import requests
+import uuid
+import argparse
 from datetime import datetime
-from ScrapingBoxOffice import get_boxoffice_data_with_titles, send_event as send_boxoffice_event
+from ScrapingBoxOffice import get_boxoffice_data_with_titles
 from ScrapingIMDbID import get_imdb_id_from_title
 from ScrapingReview import scrape_imdb_reviews_from_url
 
@@ -15,16 +17,13 @@ DELAY = float(os.environ.get("DELAY", "0.2"))
 LOOP = os.environ.get("LOOP", "true").lower() in ("1", "true", "yes")
 TIMEOUT = float(os.environ.get("TIMEOUT", "5"))
 
-# Usa /app/cache se esiste (Docker), altrimenti cartella corrente
 CACHE_DIR = "/app/cache" if os.path.exists("/app/cache") else "."
 REVIEWS_CACHE_FILE = os.path.join(CACHE_DIR, "reviews_cache.json")
 IMDB_IDS_CACHE_FILE = os.path.join(CACHE_DIR, "imdb_ids_cache.json")
 
 
 def send_review_event(ev: dict):
-    """
-    Invia un evento recensione a Fluent.
-    """
+    """Invia un evento recensione a Fluent/Kafka."""
     payload = dict(ev)
     payload["@timestamp"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
     payload["source"] = "reviews_scraper"
@@ -33,7 +32,6 @@ def send_review_event(ev: dict):
 
 
 def load_imdb_ids_cache():
-    """Carica la cache degli ID IMDb se esiste."""
     if os.path.exists(IMDB_IDS_CACHE_FILE):
         with open(IMDB_IDS_CACHE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -41,13 +39,11 @@ def load_imdb_ids_cache():
 
 
 def save_imdb_ids_cache(cache):
-    """Salva la cache degli ID IMDb."""
     with open(IMDB_IDS_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(cache, f, ensure_ascii=False, indent=2)
 
 
 def load_reviews_cache():
-    """Carica la cache delle recensioni se esiste."""
     if os.path.exists(REVIEWS_CACHE_FILE):
         with open(REVIEWS_CACHE_FILE, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -55,28 +51,97 @@ def load_reviews_cache():
 
 
 def save_reviews_cache(reviews):
-    """Salva la cache delle recensioni."""
     with open(REVIEWS_CACHE_FILE, "w", encoding="utf-8") as f:
         json.dump(reviews, f, ensure_ascii=False, indent=2)
 
 
-async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50, 
-                                   headless: bool = True, use_cache: bool = True):
+def generate_review_id(film_title: str, review_author: str, review_date: str) -> str:
+    """Genera ID univoco per la recensione."""
+    return str(uuid.uuid4())
+
+
+async def demo_live_scraping(imdb_id: str, max_reviews: int = 10, headless: bool = False):
     """
-    Per ogni film del box office:
-    1. Cerca su IMDb e ottieni l'ID (con cache)
-    2. Scarica le recensioni (con cache)
-    3. Aggiunge imdb_id come chiave di collegamento
+    Modalità DEMO LIVE per presentazioni:
+    1. Prende un ID IMDb
+    2. Scarica recensioni in tempo reale
+    3. Le invia una per una a Kafka
     
     Args:
-        boxoffice_data: Lista di dati dal box office
-        max_reviews: Numero massimo di recensioni per film
-        headless: Se True, browser invisibile
-        use_cache: Se True, usa la cache delle recensioni
+        imdb_id: ID IMDb (es: tt0111161)
+        max_reviews: Numero recensioni da scaricare
+        headless: Se False, mostra browser (per demo visiva)
     """
+    print("\n" + "="*70)
+    print("🎬 MODALITÀ DEMO LIVE - SCRAPING IN TEMPO REALE")
+    print("="*70)
+    
+    # Costruisci URL
+    imdb_url = f"https://www.imdb.com/title/{imdb_id}/"
+    print(f"\n📥 Scarico recensioni da: {imdb_url}")
+    print(f"🎯 Target: {max_reviews} recensioni")
+    print(f"👁️  Browser visibile: {'Sì' if not headless else 'No'}")
+    
+    # Scraping
+    print(f"\n⏳ Avvio scraping...")
+    try:
+        reviews = await scrape_imdb_reviews_from_url(
+            imdb_url, 
+            max_reviews=max_reviews, 
+            headless=headless
+        )
+    except Exception as e:
+        print(f"❌ Errore durante scraping: {e}")
+        return
+    
+    if not reviews:
+        print("⚠️  Nessuna recensione trovata!")
+        return
+    
+    print(f"\n✅ Trovate {len(reviews)} recensioni!")
+    print(f"\n📤 Invio a Kafka topic 'reviewFilm'...")
+    print("-" * 70)
+    
+    # Invia una per una con delay per effetto "live"
+    for i, review in enumerate(reviews, 1):
+        # Aggiungi metadati
+        review_id = generate_review_id(
+            film_title=review.get("review_title", "unknown"),
+            review_author=review.get("review_author", "unknown"),
+            review_date=review.get("review_date", "unknown")
+        )
+        review["review_id"] = review_id
+        review["imdb_id"] = imdb_id
+        
+        # Invia a Kafka
+        try:
+            send_review_event(review)
+            
+            # Output visivo per demo
+            print(f"\n[{i}/{len(reviews)}] ✓ Inviata recensione:")
+            print(f"  📝 Titolo: {review.get('review_title', 'N/A')[:60]}...")
+            print(f"  👤 Autore: {review.get('review_author', 'N/A')}")
+            print(f"  ⭐ Rating: {review.get('review_rating', 'N/A')}/10")
+            print(f"  🆔 Review ID: {review_id[:16]}...")
+            print(f"  📊 Lunghezza testo: {len(review.get('review_text', ''))} caratteri")
+            
+        except Exception as e:
+            print(f"  ❌ Errore invio: {e}")
+        
+        # Delay tra invii (per effetto visivo)
+        time.sleep(1)
+    
+    print("\n" + "="*70)
+    print(f"🎉 DEMO COMPLETATA!")
+    print(f"✓ {len(reviews)} recensioni inviate a Kafka")
+    print("="*70)
+
+
+async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50, 
+                                   headless: bool = True, use_cache: bool = True):
+    """Funzione originale per box office (invariata)."""
     all_reviews = []
     
-    # Carica cache
     if use_cache:
         cached_reviews = load_reviews_cache()
         if cached_reviews:
@@ -91,12 +156,10 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
         print(f"🎬 Elaboro: {title}")
         print(f"{'='*60}")
         
-        # Step 1: Ottieni l'ID IMDb (con cache)
         if title in imdb_ids_cache:
             imdb_id = imdb_ids_cache[title]
             print(f"📦 ID dalla cache: {imdb_id}")
         else:
-            # Retry fino a 3 volte in caso di errore
             imdb_id = None
             for attempt in range(3):
                 try:
@@ -107,7 +170,7 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
                         break
                     else:
                         print(f"⚠️  Tentativo {attempt + 1}/3 fallito per '{title}'")
-                        if attempt < 2:  # Non aspettare dopo l'ultimo tentativo
+                        if attempt < 2:
                             await asyncio.sleep(3)
                 except Exception as e:
                     print(f"❌ Errore tentativo {attempt + 1}/3 per '{title}': {e}")
@@ -115,10 +178,9 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
                         await asyncio.sleep(5)
         
         if not imdb_id:
-            print(f"⚠️  Salto '{title}' - ID non trovato dopo 3 tentativi")
+            print(f"⚠️  Salto scraping per '{title}' - nessun IMDb ID")
             continue
         
-        # Step 2: Costruisci l'URL e scarica le recensioni
         imdb_url = f"https://www.imdb.com/title/{imdb_id}/"
         print(f"📥 Scarico recensioni per {imdb_url}")
         
@@ -131,80 +193,106 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
             
             print(f"✓ Trovate {len(reviews)} recensioni per '{title}'")
             
-            # Aggiungi metadati a ogni recensione
             for review in reviews:
-                review["film_title"] = title
-                review["imdb_id"] = imdb_id  # ← CHIAVE DI COLLEGAMENTO
+                review_id = generate_review_id(
+                    film_title=title,
+                    review_author=review.get("review_author", "unknown"),
+                    review_date=review.get("review_date", "unknown")
+                )
+                review["review_id"] = review_id
+                review["imdb_id"] = imdb_id
                 all_reviews.append(review)
                 
         except Exception as e:
             print(f"❌ Errore nello scraping di '{title}': {e}")
         
-        # Pausa tra un film e l'altro
         await asyncio.sleep(2)
     
-    # Salva cache delle recensioni
     save_reviews_cache(all_reviews)
-    
     return all_reviews
 
 
 def main():
-    """
-    Workflow completo:
-    1. Ottieni i dati dal box office (con cache)
-    2. Invia dati box office a Fluent
-    3. Per ogni film, cerca su IMDb e scarica recensioni (con cache)
-    4. Aggiunge imdb_id ai dati box office
-    5. Invia recensioni a Fluent in loop
-    """
-    # Step 1: Ottieni i dati completi dal box office (usa cache)
+    """Main con supporto per modalità demo."""
+    
+    # Parser argomenti
+    parser = argparse.ArgumentParser(description="Scraper recensioni IMDb")
+    parser.add_argument(
+        "--demo",
+        type=str,
+        metavar="IMDB_ID",
+        help="Modalità DEMO: scraping live di un film specifico (es: --demo tt0111161)"
+    )
+    parser.add_argument(
+        "--max-reviews",
+        type=int,
+        default=10,
+        help="Numero massimo di recensioni (default: 10 in demo, 30 in normale)"
+    )
+    
+    args = parser.parse_args()
+    
+    # MODALITÀ DEMO
+    if args.demo:
+        imdb_id = args.demo
+        
+        # Valida formato ID
+        if not imdb_id.startswith("tt"):
+            imdb_id = f"tt{imdb_id}"
+        
+        print(f"\n🎬 Avvio modalità DEMO per {imdb_id}")
+        
+        asyncio.run(demo_live_scraping(
+            imdb_id=imdb_id,
+            max_reviews=args.max_reviews,
+            headless=False
+        ))
+        
+        return
+    
+    # MODALITÀ NORMALE (originale)
     print("📊 Recupero dati dal box office...")
     boxoffice_data = get_boxoffice_data_with_titles(max_films=10, use_cache=True)
     print(f"✓ Trovati {len(boxoffice_data)} film")
     
-    # Step 2: Scarica recensioni e ottieni imdb_id per ogni film
     print("\n🔍 Inizio scraping recensioni...")
     all_reviews = asyncio.run(
-        scrape_reviews_for_films(boxoffice_data, max_reviews=30, headless=True, use_cache=True)
+        scrape_reviews_for_films(
+            boxoffice_data, 
+            max_reviews=args.max_reviews if args.max_reviews != 10 else 30,
+            headless=not args.show_browser,
+            use_cache=True
+        )
     )
     
     print(f"\n✅ Totale recensioni raccolte: {len(all_reviews)}")
     
-    # Step 3: Crea mapping titolo -> imdb_id
-    title_to_imdb = {r["film_title"]: r["imdb_id"] for r in all_reviews}
+    title_to_imdb = {r.get("imdb_id"): r.get("imdb_id") for r in all_reviews if r.get("imdb_id")}
     
-    # Step 4: Aggiungi imdb_id (o titolo come fallback) ai dati box office e invia a Fluent
     print(f"\n📤 Invio dati box office a {BOXOFFICE_SINK_URL}...")
     for film_data in boxoffice_data:
-        # Aggiungi imdb_id come chiave di collegamento
-        imdb_id = title_to_imdb.get(film_data["titolo"], None)
-        
-        # Se imdb_id è None, usa il titolo come chiave primaria
-        film_data["primary_key"] = imdb_id if imdb_id else film_data["titolo"]
+        imdb_id = title_to_imdb.get(film_data["titolo"])
         film_data["imdb_id"] = imdb_id
         
-        # Invia a Fluent
         payload = dict(film_data)
         payload["@timestamp"] = datetime.utcnow().isoformat(timespec="seconds") + "Z"
         payload["source"] = "boxoffice_scraper"
+        
         try:
             r = requests.post(BOXOFFICE_SINK_URL, json=payload, timeout=TIMEOUT)
             r.raise_for_status()
-            key_info = f"primary_key: {film_data['primary_key']}"
-            print(f"📤 Box office inviato: {film_data['titolo']} ({key_info})")
+            print(f"📤 Box office inviato: {film_data['titolo']}")
         except Exception as e:
             print(f"❌ Errore invio box office per {film_data['titolo']}: {e}")
         time.sleep(DELAY)
     
-    # Step 5: Invia recensioni a Fluent in loop
     print(f"\n📤 Invio recensioni a {REVIEWS_SINK_URL}...")
+    
     while True:
         for review in all_reviews:
-            # Aggiungi primary_key (imdb_id o titolo come fallback)
-            review["primary_key"] = review["imdb_id"] if review["imdb_id"] else review["film_title"]
             send_review_event(review)
-            print(f"📤 Recensione: {review['film_title']} - {review['review_title'][:50]}...")
+            ref = review.get("imdb_id", "unknown")
+            print(f"📤 Recensione ID={review['review_id'][:8]}... | Film={ref}")
             time.sleep(DELAY)
         if not LOOP:
             break

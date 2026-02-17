@@ -17,7 +17,7 @@ else
       "config": {
         "connector.class": "io.confluent.connect.elasticsearch.ElasticsearchSinkConnector",
         "tasks.max": "1",
-        "topics": "topboxoffice,reviewFilm,revisitedReview",
+        "topics": "topboxoffice,reviewFilm,revisedReview",
         "connection.url": "http://elasticsearch:9200",
         "key.ignore": "true",
         "schema.ignore": "true"

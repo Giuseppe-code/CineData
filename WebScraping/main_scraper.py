@@ -11,7 +11,7 @@ from ScrapingIMDbID import get_imdb_id_from_title
 from ScrapingReview import scrape_imdb_reviews_from_url
 
 
-BOXOFFICE_SINK_URL = os.environ.get("BOXOFFICE_SINK_URL", "http://fluentbit:9880/topBoxOffice")
+BOXOFFICE_SINK_URL = os.environ.get("BOXOFFICE_SINK_URL", "http://fluentbit:9880/topboxoffice")
 REVIEWS_SINK_URL = os.environ.get("REVIEWS_SINK_URL", "http://fluentbit:9880/reviewFilm")
 DELAY = float(os.environ.get("DELAY", "0.2"))
 LOOP = os.environ.get("LOOP", "true").lower() in ("1", "true", "yes")
@@ -229,6 +229,11 @@ def main():
         default=10,
         help="Numero massimo di recensioni (default: 10 in demo, 30 in normale)"
     )
+    parser.add_argument(
+        "--show-browser",
+        action="store_true",
+        help="Mostra browser durante scraping (utile per demo)"
+    )
     
     args = parser.parse_args()
     
@@ -245,7 +250,7 @@ def main():
         asyncio.run(demo_live_scraping(
             imdb_id=imdb_id,
             max_reviews=args.max_reviews,
-            headless=False
+            headless=not args.show_browser
         ))
         
         return

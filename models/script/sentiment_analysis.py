@@ -3,9 +3,9 @@
 
 import json
 import time
-from pyspark.sql import SparkSession
-from pyspark.sql.functions import udf, col, from_json, struct, to_json
-from pyspark.sql.types import StructType, StructField, StringType, FloatType, ArrayType
+from pyspark.sql import SparkSession, Row
+from pyspark.sql.functions import col, from_json
+from pyspark.sql.types import StructType, StructField, StringType
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
@@ -21,80 +21,55 @@ LABEL_ORDER = [
     "story", "emotions", "characters", "production_design"
 ]
 
+MODEL_PATH = "/models"
+
 # ===== CARICAMENTO MODELLO =====
 print("\n[2/6] Loading BERT model and tokenizer...")
-MODEL_PATH = "/models"
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
 print(f"   Device: {device}")
 
 try:
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, use_fast=False)
-    model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
-    model.to(device)
-    model.eval()
-    print("   ✓ Model loaded successfully!")
+    global_tokenizer = AutoTokenizer.from_pretrained(MODEL_PATH, use_fast=False)
+    global_model = AutoModelForSequenceClassification.from_pretrained(MODEL_PATH)
+    global_model.eval()
     
     with open(f"{MODEL_PATH}/meta.json", "r") as f:
         meta = json.load(f)
         max_length = meta.get("max_length", 128)
-        print(f"   Max sequence length: {max_length}")
-        print(f"   Model: {meta.get('model_name', 'N/A')}")
+    
+    print("   ✓ Model loaded successfully!")
+    print(f"   Max sequence length: {max_length}")
         
 except Exception as e:
     print(f"   ✗ Error loading model: {e}")
     raise
 
-# ===== UDF PER PREDIZIONE =====
-def predict_aspects(review_text):
-    if not review_text or len(review_text.strip()) == 0:
-        return [0.0] * 7
-    
-    try:
-        inputs = tokenizer(
-            review_text,
-            return_tensors="pt",
-            truncation=True,
-            max_length=max_length,
-            padding=True
-        )
-        inputs = {k: v.to(device) for k, v in inputs.items()}
-        
-        with torch.no_grad():
-            outputs = model(**inputs)
-            predictions = outputs.logits.detach().cpu().numpy().reshape(-1).tolist()
-        
-        return predictions
-    
-    except Exception as e:
-        print(f"   ⚠ Prediction error: {e}")
-        return [0.0] * 7
-
-predict_udf = udf(predict_aspects, ArrayType(FloatType()))
-
 # ===== SPARK SESSION =====
 print("\n[3/6] Creating Spark session...")
 spark = SparkSession.builder \
     .appName("ReviewAspectAnalysis") \
-    .master("local[2]") \
-    .config("spark.sql.shuffle.partitions", "2") \
-    .config("spark.driver.memory", "1500m") \
+    .master("local[1]") \
+    .config("spark.sql.shuffle.partitions", "1") \
+    .config("spark.driver.memory", "512m") \
+    .config("spark.memory.fraction", "0.6") \
+    .config("spark.python.worker.faulthandler.enabled", "true") \
     .getOrCreate()
 
 spark.sparkContext.setLogLevel("WARN")
 print("   ✓ Spark session created")
 
-# ===== SCHEMA KAFKA MESSAGE =====
+# ===== SCHEMA KAFKA =====
 kafka_schema = StructType([
-    StructField("review_id", StringType(), True),        # PRIMARY KEY
-    StructField("imdb_id", StringType(), True),          # ID IMDb
+    StructField("review_id", StringType(), True),
+    StructField("imdb_id", StringType(), True),
     StructField("review_title", StringType(), True),
     StructField("review_text", StringType(), True),
     StructField("review_rating", StringType(), True),
     StructField("review_author", StringType(), True),
     StructField("review_date", StringType(), True),
-    StructField("imdb_reviews_url", StringType(), True), # Opzionale
-    StructField("@timestamp", StringType(), True),       # Da Fluent
-    StructField("source", StringType(), True),           # Da Fluent
+    StructField("imdb_reviews_url", StringType(), True),
+    StructField("@timestamp", StringType(), True),
+    StructField("source", StringType(), True),
 ])
 
 # ===== KAFKA STREAMING =====
@@ -116,56 +91,98 @@ except Exception as e:
     print(f"   ✗ Kafka connection error: {e}")
     raise
 
-# ===== PROCESSAMENTO STREAM =====
+# ===== PROCESSING =====
 print("\n[5/6] Setting up stream processing...")
 
 reviews_df = df.selectExpr("CAST(value AS STRING) as json_string") \
     .select(from_json(col("json_string"), kafka_schema).alias("data")) \
     .select("data.*")
 
-# Applica modello BERT
-predictions_df = reviews_df.withColumn("predictions", predict_udf(col("review_text")))
+# ===== FOREACHBATCH =====
+def process_batch(batch_df, batch_id):
+    """Processa batch con BERT."""
+    try:
+        if batch_df.isEmpty():
+            return
+        
+        count = batch_df.count()
+        print(f"\n[Batch {batch_id}] Processing {count} reviews...")
+        
+        # Raccogli righe
+        rows = batch_df.collect()
+        results = []
+        
+        for idx, row in enumerate(rows, 1):
+            text = row.review_text
+            
+            if not text or len(str(text).strip()) == 0:
+                predictions = [0.0] * 7
+            else:
+                try:
+                    inputs = global_tokenizer(
+                        str(text),
+                        return_tensors="pt",
+                        truncation=True,
+                        max_length=max_length,
+                        padding=True
+                    )
+                    
+                    with torch.no_grad():
+                        outputs = global_model(**inputs)
+                        predictions = outputs.logits.detach().cpu().numpy().reshape(-1).tolist()
+                    
+                    print(f"  [{idx}/{count}] ✓ Predicted")
+                        
+                except Exception as e:
+                    print(f"  [{idx}/{count}] ✗ Error: {e}")
+                    predictions = [0.0] * 7
+            
+            # Crea risultato
+            result = {
+                "review_id": row.review_id,
+                "imdb_id": row.imdb_id,
+                "review_title": row.review_title if row.review_title else "",
+                "review_author": row.review_author if row.review_author else "",
+                "review_rating": row.review_rating if row.review_rating else "",
+                "review_date": row.review_date if row.review_date else "",
+                "pred_direction": float(predictions[0]),
+                "pred_cinematography": float(predictions[1]),
+                "pred_unique_concept": float(predictions[2]),
+                "pred_story": float(predictions[3]),
+                "pred_emotions": float(predictions[4]),
+                "pred_characters": float(predictions[5]),
+                "pred_production_design": float(predictions[6])
+            }
+            results.append(result)
+        
+        # Invia a Kafka
+        output_rows = [Row(value=json.dumps(r)) for r in results]
+        
+        if output_rows:
+            output_df = spark.createDataFrame(output_rows)
+            output_df.write \
+                .format("kafka") \
+                .option("kafka.bootstrap.servers", "kafka:9092") \
+                .option("topic", "revisedReview") \
+                .save()
+            
+            print(f"[Batch {batch_id}] ✓ Sent {len(results)} reviews to Kafka")
+    
+    except Exception as e:
+        print(f"[Batch {batch_id}] ✗ Batch error: {e}")
+        import traceback
+        traceback.print_exc()
 
-# Esplodi predizioni
-for i, label in enumerate(LABEL_ORDER):
-    predictions_df = predictions_df.withColumn(label, col("predictions")[i])
-
-# Output finale
-output_df = predictions_df.select(
-    "review_id",
-    "imdb_id",
-    "review_title",
-    "review_author",
-    "review_rating",
-    "review_date",
-    col("direction").alias("pred_direction"),
-    col("cinematography").alias("pred_cinematography"),
-    col("unique_concept").alias("pred_unique_concept"),
-    col("story").alias("pred_story"),
-    col("emotions").alias("pred_emotions"),
-    col("characters").alias("pred_characters"),
-    col("production_design").alias("pred_production_design")
-)
-
-# ===== OUTPUT SU KAFKA =====
+# ===== START STREAMING =====
 print("\n[6/6] Starting streaming query...")
 print("=" * 70)
 print("Input:  Kafka topic 'reviewFilm'")
 print("Output: Kafka topic 'revisedReview'")
 print("=" * 70)
 
-# Converti in JSON per Kafka
-output_json = output_df.select(
-    to_json(struct([output_df[c] for c in output_df.columns])).alias("value")
-)
-
-query = output_json.writeStream \
-    .outputMode("append") \
-    .format("kafka") \
-    .option("kafka.bootstrap.servers", "kafka:9092") \
-    .option("topic", "revisedReview") \
-    .option("checkpointLocation", "/tmp/checkpoint_revisedReview") \
-    .trigger(processingTime='5 seconds') \
+query = reviews_df.writeStream \
+    .foreachBatch(process_batch) \
+    .trigger(processingTime='10 seconds') \
     .start()
 
 print("✓ Streaming started!")

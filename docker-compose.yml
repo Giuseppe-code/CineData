@@ -26,6 +26,11 @@ services:
       - ./fluentbit/fluent-bit.conf:/fluent-bit/etc/fluent-bit.conf:ro
     networks:
       - appnet
+    mem_limit: 128m
+    deploy:
+      resources:
+        limits:
+          memory: 128M
 
   kafka:
     profiles: ["kafka", "clk","all"]
@@ -127,6 +132,11 @@ services:
           --property print.timestamp=true \
           --property print.key=true \
           --property print.value=true
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
     networks:
       - appnet
 
@@ -178,6 +188,11 @@ services:
       - "host.docker.internal:172.17.0.1"
     networks:
         - appnet
+    
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
 
   elasticsearch:
     container_name: elasticsearch
@@ -186,7 +201,7 @@ services:
     environment:
       - discovery.type=single-node
       - xpack.security.enabled=false
-      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - ES_JAVA_OPTS= -Xms256m -Xmx256m
     depends_on:
       - kafka
     ports:
@@ -196,7 +211,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0' 
+          cpus: '0.5'
+          memory: 512M
 
   kibana:
     profiles: ["visual", "clk","all"]
@@ -206,47 +222,65 @@ services:
     environment:
       ELASTICSEARCH_HOSTS: '["http://elasticsearch:9200"]'
       NODE_OPTIONS: "--max-old-space-size=512"
+    mem_limit: 512m
+    deploy:
+          resources:
+            limits:
+              memory: 512M
     ports: 
       - "5601:5601"
     networks:
       - appnet
+
   spark-app:
     profiles: ["sparkText","all"]
     image: apache/spark:4.0.2-python3
+    depends_on:
+      - kafka
     platform: linux/arm64
     container_name: spark-sentiment
     dns:
-    - 8.8.8.8
-    user: root
+      - 8.8.8.8
+      - 8.8.4.4
     volumes:
       - ./models/script:/app
       - ./models/quickcheck_model:/models
     entrypoint: ["/bin/bash", "-c"]
+    user: root
     command: >
       "
+      echo '=== Cleaning cache ===' &&
+      rm -rf /root/.ivy2 &&
       echo '=== Installing dependencies ===' &&
       pip3 install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu &&
-      pip3 install --no-cache-dir transformers protobuf sentencepiece &&
-      echo '=== Done ===' &&
-
-
+      pip3 install --no-cache-dir transformers protobuf sentencepiece pandas pyarrow &&
       echo '=== Starting Spark ===' &&
       /opt/spark/bin/spark-submit
-      --master local[2]
+      --master local[1]
       --packages org.apache.spark:spark-sql-kafka-0-10_2.13:4.0.2
-      --driver-memory 1g
-      --executor-memory 1g
-      --conf spark.driver.maxResultSize=512m
-      --conf spark.sql.shuffle.partitions=2
+      --verbose
+      --repositories https://repo1.maven.org/maven2
+      --driver-memory 512m
+      --executor-memory 512m
+      --conf spark.driver.maxResultSize=256m
+      --conf spark.sql.shuffle.partitions=1
+      --conf spark.memory.fraction=0.6
+      --conf spark.memory.storageFraction=0.3
+      --conf spark.executor.cores=1
       /app/sentiment_analysis.py
       "
+    mem_limit: 2g
+    mem_reservation: 1500m
     deploy:
       resources:
         limits:
-          cpus: '2'
+          cpus: '1'
+          memory: 2G
+        reservations:
+          memory: 1500M
     networks:
-          - appnet
-          
+      - appnet
+
 networks:
   appnet:
     driver: bridge

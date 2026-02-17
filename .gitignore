@@ -1,3 +1,12 @@
 .myenv
 /elasticsarch
 /data
+models/quickcheck_model/*.bin
+models/quickcheck_model/*.safetensors
+models/quickcheck_model/*.pt
+
+WebScraping/cache/
+
+__pycache__/
+*.pyc
+.env

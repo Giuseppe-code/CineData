@@ -60,29 +60,23 @@ def generate_review_id(film_title: str, review_author: str, review_date: str) ->
     return str(uuid.uuid4())
 
 
-async def demo_live_scraping(imdb_id: str, max_reviews: int = 10, headless: bool = False):
+async def demo_live_scraping(imdb_id: str, film_title: str, max_reviews: int = 10, headless: bool = False):
     """
     Modalità DEMO LIVE per presentazioni:
-    1. Prende un ID IMDb
+    1. Prende un ID IMDb e un titolo
     2. Scarica recensioni in tempo reale
     3. Le invia una per una a Kafka
-    
-    Args:
-        imdb_id: ID IMDb (es: tt0111161)
-        max_reviews: Numero recensioni da scaricare
-        headless: Se False, mostra browser (per demo visiva)
     """
     print("\n" + "="*70)
     print("🎬 MODALITÀ DEMO LIVE - SCRAPING IN TEMPO REALE")
     print("="*70)
     
-    # Costruisci URL
     imdb_url = f"https://www.imdb.com/title/{imdb_id}/"
-    print(f"\n📥 Scarico recensioni da: {imdb_url}")
+    print(f"\n🎬 Film: {film_title} ({imdb_id})")
+    print(f"📥 Scarico recensioni da: {imdb_url}")
     print(f"🎯 Target: {max_reviews} recensioni")
     print(f"👁️  Browser visibile: {'Sì' if not headless else 'No'}")
     
-    # Scraping
     print(f"\n⏳ Avvio scraping...")
     try:
         reviews = await scrape_imdb_reviews_from_url(
@@ -102,23 +96,21 @@ async def demo_live_scraping(imdb_id: str, max_reviews: int = 10, headless: bool
     print(f"\n📤 Invio a Kafka topic 'reviewFilm'...")
     print("-" * 70)
     
-    # Invia una per una con delay per effetto "live"
     for i, review in enumerate(reviews, 1):
-        # Aggiungi metadati
         review_id = generate_review_id(
-            film_title=review.get("review_title", "unknown"),
+            film_title=film_title,
             review_author=review.get("review_author", "unknown"),
             review_date=review.get("review_date", "unknown")
         )
         review["review_id"] = review_id
         review["imdb_id"] = imdb_id
-        
-        # Invia a Kafka
+        review["film_title"] = film_title  # ← AGGIUNTO
+
         try:
             send_review_event(review)
             
-            # Output visivo per demo
             print(f"\n[{i}/{len(reviews)}] ✓ Inviata recensione:")
+            print(f"  🎬 Film: {film_title}")
             print(f"  📝 Titolo: {review.get('review_title', 'N/A')[:60]}...")
             print(f"  👤 Autore: {review.get('review_author', 'N/A')}")
             print(f"  ⭐ Rating: {review.get('review_rating', 'N/A')}/10")
@@ -128,12 +120,12 @@ async def demo_live_scraping(imdb_id: str, max_reviews: int = 10, headless: bool
         except Exception as e:
             print(f"  ❌ Errore invio: {e}")
         
-        # Delay tra invii (per effetto visivo)
         time.sleep(1)
     
     print("\n" + "="*70)
     print(f"🎉 DEMO COMPLETATA!")
     print(f"✓ {len(reviews)} recensioni inviate a Kafka")
+    print(f"✓ Film: {film_title} ({imdb_id})")
     print("="*70)
 
 
@@ -201,6 +193,7 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
                 )
                 review["review_id"] = review_id
                 review["imdb_id"] = imdb_id
+                review["film_title"] = title 
                 all_reviews.append(review)
                 
         except Exception as e:
@@ -215,13 +208,19 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
 def main():
     """Main con supporto per modalità demo."""
     
-    # Parser argomenti
     parser = argparse.ArgumentParser(description="Scraper recensioni IMDb")
     parser.add_argument(
         "--demo",
         type=str,
         metavar="IMDB_ID",
         help="Modalità DEMO: scraping live di un film specifico (es: --demo tt0111161)"
+    )
+    parser.add_argument(
+        "--title",                          
+        type=str,
+        metavar="TITOLO",
+        default=None,
+        help="Titolo del film per modalità demo (es: --title 'The Matrix')"
     )
     parser.add_argument(
         "--max-reviews",
@@ -245,10 +244,24 @@ def main():
         if not imdb_id.startswith("tt"):
             imdb_id = f"tt{imdb_id}"
         
-        print(f"\n🎬 Avvio modalità DEMO per {imdb_id}")
+        # Titolo: usa --title se specificato, altrimenti cerca nella cache
+        if args.title:
+            film_title = args.title
+        else:
+            # Cerca nella cache imdb_ids {titolo: imdb_id} → inverti
+            imdb_cache = load_imdb_ids_cache()
+            inverted = {v: k for k, v in imdb_cache.items()}
+            film_title = inverted.get(imdb_id, imdb_id)  # fallback: usa imdb_id
+            
+            if film_title == imdb_id:
+                print(f"⚠️  Titolo non trovato per {imdb_id}.")
+                print(f"   Suggerimento: usa --title 'Nome Film' per specificarlo")
+        
+        print(f"\n🎬 Avvio modalità DEMO per {film_title} ({imdb_id})")
         
         asyncio.run(demo_live_scraping(
             imdb_id=imdb_id,
+            film_title=film_title,
             max_reviews=args.max_reviews,
             headless=not args.show_browser
         ))
@@ -296,7 +309,7 @@ def main():
     while True:
         for review in all_reviews:
             send_review_event(review)
-            ref = review.get("imdb_id", "unknown")
+            ref = review.get("film_title", review.get("imdb_id", "unknown"))
             print(f"📤 Recensione ID={review['review_id'][:8]}... | Film={ref}")
             time.sleep(DELAY)
         if not LOOP:

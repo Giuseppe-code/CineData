@@ -16,4 +16,4 @@ RUN mkdir -p /app/cache
 # Definisci il volume per persistere i cache
 VOLUME ["/app/cache"]
 
-CMD ["bash", "-lc", "python main_scraper.py"]
+CMD ["python","main_scraper.py"]

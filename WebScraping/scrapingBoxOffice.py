@@ -52,7 +52,7 @@ def scrape_boxoffice_data(use_cache: bool = True):
         browser = p.chromium.launch(headless=True)
         page = browser.new_page()
 
-        page.goto("https://tamburino.cinetel.it/pages/boxoffice.php?edperiodo=aWVyaQ==", 
+        page.goto("https://tamburino.cinetel.it/pages/boxoffice.php?edperiodo=c2NvcnNhc2V0dGltYW5hbGU=", 
                   wait_until="domcontentloaded")
 
         # Aspetta che compaiano le righe della tabella

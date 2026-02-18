@@ -21,6 +21,7 @@ Se lo si desidera è possibile scegliere personalmente un film da analizzare.
 
 ![Preview1](Presentazione/Visualization1.png)
 ![Previe2](Presentazione/Visualization2.png)
+
 ---
 ## 🏗️ Struttura
 
@@ -163,7 +164,7 @@ Controllare che spark sia attivo
 docker logs -f spark-sentiment       
 ```
 
-altrimennti 
+altrimenti 
 ```
 docker compose --profile sparkText --profile kafka up
 ```

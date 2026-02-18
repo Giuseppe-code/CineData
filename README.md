@@ -88,31 +88,12 @@ docker compose --profile scraping up
 
 #### Puoi inserire tu un film da cercare con l'id di IMDb e un titolo a tua scelta
 ```bash
-    docker compose run --rm scraping python main_scraper.py --demo tt0133093  --title "The Matrix" --max-reviews 20
+docker compose run --rm scraping python main_scraper.py --demo tt0133093  --title "The Matrix" --max-reviews 20
 ```
 
 ### Importa le dashboard Kibana
 
 vai su **Kibana → Stack Management → Saved Objects → Import** e carica il file `scripts/kibana-export.ndjson` incluso nel repository.
-
----
-
-## 📁 Struttura del progetto
-
-```
-CineData/
-├── WebScraping/          # Scraper Python per Cinetel e IMDb
-├── fluentbit/            # Configurazione Fluent Bit
-├── models/
-│   ├── script/           # Script Spark per inferenza BERT
-│   └── cinedata_bert_film/  # Modello fine-tunato (non incluso nel repo)
-├── training/             # Script di fine-tuning BERT
-├── elasticsearch/        # Configurazioni Elasticsearch
-├── scripts/              # Script di inizializzazione connettori Kafka
-    └── kibana-export.ndjson  # Dashboard e Data Views preconfigurate
-├── docker-compose.yml    # Orchestrazione servizi
-├── start.sh              # Script di avvio
-```
 
 ---
 
@@ -147,7 +128,6 @@ Dipartimento di Matematica e Informatica — Università degli Studi di Catania
 
 Visualizzare che kafka-connect sia stato creato correttamente
 ```
-
 curl -s http://localhost:8083/connectors      
 ```
 

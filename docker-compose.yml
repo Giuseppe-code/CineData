@@ -253,6 +253,7 @@ services:
     volumes:
       - ./models/script:/app
       - ./models/cinedata_bert_film:/models
+      - spark-checkpoints:/tmp/spark-checkpoints
     entrypoint: ["/bin/bash", "-c"]
     user: root
     command: >
@@ -294,3 +295,4 @@ networks:
     driver: bridge
 volumes:
   kibana-data:
+  spark-checkpoints:

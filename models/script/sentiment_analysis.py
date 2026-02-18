@@ -35,7 +35,7 @@ try:
     
     with open(f"{MODEL_PATH}/meta.json", "r") as f:
         meta = json.load(f)
-        max_length = meta.get("max_length", 128)
+        max_length = meta.get("max_length", 256)
     
     print("   ✓ Model loaded successfully!")
     print(f"   Max sequence length: {max_length}")
@@ -185,6 +185,7 @@ print("=" * 70)
 query = reviews_df.writeStream \
     .foreachBatch(process_batch) \
     .trigger(processingTime='10 seconds') \
+    .option("checkpointLocation", "/tmp/spark-checkpoints/reviewFilm") \
     .start()
 
 print("✓ Streaming started!")

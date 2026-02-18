@@ -17,10 +17,14 @@ Se lo si desidera è possibile scegliere personalmente un film da analizzare.
 - **Direttori di sala** — analisi del sentiment del pubblico e sui film più proficui per orientare le scelte di visione
 
 ---
+## Preview
 
+![Preview1](Presentazione/Visualization1.png)
+![Previe2](Presentazione/Visualization2.png)
+---
 ## 🏗️ Struttura
 
-![Struttura](structureTap2.png)
+![Struttura](Presentazione/structureTap2.png)
 
 | Layer | Tecnologia | Ruolo |
 |-------|-----------|-------|

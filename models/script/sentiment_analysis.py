@@ -35,7 +35,7 @@ try:
     
     with open(f"{MODEL_PATH}/meta.json", "r") as f:
         meta = json.load(f)
-        max_length = meta.get("max_length", 256)
+        max_length = meta.get("max_length", 128) 
     
     print("   ✓ Model loaded successfully!")
     print(f"   Max sequence length: {max_length}")

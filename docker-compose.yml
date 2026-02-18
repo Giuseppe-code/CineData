@@ -157,6 +157,9 @@ services:
       CONNECT_CONFIG_STORAGE_TOPIC: _connect-configs
       CONNECT_OFFSET_STORAGE_TOPIC: _connect-offsets
       CONNECT_STATUS_STORAGE_TOPIC: _connect-status
+      CONNECT_OFFSET_STORAGE_PARTITIONS: "1"        
+      CONNECT_CONFIG_STORAGE_PARTITIONS: "1"        
+      CONNECT_STATUS_STORAGE_PARTITIONS: "1"  
       CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
       CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_INTERNAL_KEY_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
@@ -172,6 +175,9 @@ services:
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_INTERNAL_KEY_CONVERTER_SCHEMAS_ENABLE: "false"
       CONNECT_INTERNAL_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_OFFSET_STORAGE_CLEANUP_POLICY: "compact"
+      CONNECT_CONFIG_STORAGE_CLEANUP_POLICY: "compact"
+      CONNECT_STATUS_STORAGE_CLEANUP_POLICY: "compact"
     volumes:
       - $PWD/data:/data
     command:
@@ -246,7 +252,7 @@ services:
       - 8.8.4.4
     volumes:
       - ./models/script:/app
-      - ./models/cinedata_bert_models:/models
+      - ./models/cinedata_bert_film:/models
     entrypoint: ["/bin/bash", "-c"]
     user: root
     command: >

@@ -62,6 +62,7 @@ print("   ✓ Spark session created")
 kafka_schema = StructType([
     StructField("review_id", StringType(), True),
     StructField("imdb_id", StringType(), True),
+    StructField("film_title", StringType(), True),
     StructField("review_title", StringType(), True),
     StructField("review_text", StringType(), True),
     StructField("review_rating", StringType(), True),
@@ -141,6 +142,7 @@ def process_batch(batch_df, batch_id):
             result = {
                 "review_id": row.review_id,
                 "imdb_id": row.imdb_id,
+                "film_title": row.film_title if row.film_title else "",
                 "review_title": row.review_title if row.review_title else "",
                 "review_author": row.review_author if row.review_author else "",
                 "review_rating": row.review_rating if row.review_rating else "",

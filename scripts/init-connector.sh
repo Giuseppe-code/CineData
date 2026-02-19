@@ -4,8 +4,8 @@ CONNECT_URL="${CONNECT_URL:-http://kafka-connect:8083}"
 
 echo "Waiting for Kafka Connect to be ready..."
 until curl -sf "$CONNECT_URL/connectors" > /dev/null; do
-  echo "Not ready yet..."
-  sleep 5
+  echo "Waiting for Kafka Connect, not ready yet..."
+  sleep 15
 done
 
 echo "Waiting for Elasticsearch plugin to be loaded..."

@@ -50,11 +50,6 @@ def load_reviews_cache():
     return []
 
 
-def save_reviews_cache(reviews):
-    with open(REVIEWS_CACHE_FILE, "w", encoding="utf-8") as f:
-        json.dump(reviews, f, ensure_ascii=False, indent=2)
-
-
 def generate_review_id(film_title: str, review_author: str, review_date: str) -> str:
     """Genera ID univoco per la recensione."""
     return str(uuid.uuid4())
@@ -104,7 +99,7 @@ async def demo_live_scraping(imdb_id: str, film_title: str, max_reviews: int = 1
         )
         review["review_id"] = review_id
         review["imdb_id"] = imdb_id
-        review["film_title"] = film_title  # ← AGGIUNTO
+        review["film_title"] = film_title  
 
         try:
             send_review_event(review)
@@ -134,12 +129,6 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
     """Funzione originale per box office (invariata)."""
     all_reviews = []
     
-    if use_cache:
-        cached_reviews = load_reviews_cache()
-        if cached_reviews:
-            print(f"📦 Trovate {len(cached_reviews)} recensioni in cache")
-            return cached_reviews
-    
     imdb_ids_cache = load_imdb_ids_cache()
     
     for film_data in boxoffice_data:
@@ -149,26 +138,26 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
         print(f"{'='*60}")
         
         if title in imdb_ids_cache:
-            imdb_id = imdb_ids_cache[title]
-            print(f"📦 ID dalla cache: {imdb_id}")
-        else:
-            imdb_id = None
-            for attempt in range(3):
-                try:
-                    imdb_id = await get_imdb_id_from_title(title, headless=headless)
-                    if imdb_id:
-                        imdb_ids_cache[title] = imdb_id
-                        save_imdb_ids_cache(imdb_ids_cache)
-                        break
-                    else:
-                        print(f"⚠️  Tentativo {attempt + 1}/3 fallito per '{title}'")
-                        if attempt < 2:
-                            await asyncio.sleep(3)
-                except Exception as e:
-                    print(f"❌ Errore tentativo {attempt + 1}/3 per '{title}': {e}")
+            print(f"📦 Film già processato (ID in cache: {imdb_ids_cache[title]}), salto le recensioni.")
+            continue  
+
+        imdb_id = None
+        for attempt in range(3):
+            try:
+                imdb_id = await get_imdb_id_from_title(title, headless=headless)
+                if imdb_id:
+                    imdb_ids_cache[title] = imdb_id
+                    save_imdb_ids_cache(imdb_ids_cache)
+                    break
+                else:
+                    print(f"⚠️  Tentativo {attempt + 1}/3 fallito per '{title}'")
                     if attempt < 2:
-                        await asyncio.sleep(5)
-        
+                        await asyncio.sleep(3)
+            except Exception as e:
+                print(f"❌ Errore tentativo {attempt + 1}/3 per '{title}': {e}")
+                if attempt < 2:
+                    await asyncio.sleep(5)
+    
         if not imdb_id:
             print(f"⚠️  Salto scraping per '{title}' - nessun IMDb ID")
             continue
@@ -201,7 +190,6 @@ async def scrape_reviews_for_films(boxoffice_data: list, max_reviews: int = 50,
         
         await asyncio.sleep(2)
     
-    save_reviews_cache(all_reviews)
     return all_reviews
 
 

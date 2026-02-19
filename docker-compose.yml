@@ -124,7 +124,7 @@ services:
           echo "Waiting for Kafka..."
           sleep 2
         done
-        echo "Starting consumer on topic topBoxOffice..."
+        echo "Starting consumer on topic revisedReview..."
         exec /opt/kafka/bin/kafka-console-consumer.sh \
           --bootstrap-server kafka:9092 \
           --topic revisedReview \
@@ -194,7 +194,6 @@ services:
       - "host.docker.internal:172.17.0.1"
     networks:
         - appnet
-    
     deploy:
       resources:
         limits:
@@ -280,13 +279,6 @@ services:
       "
     mem_limit: 2g
     mem_reservation: 1500m
-    deploy:
-      resources:
-        limits:
-          cpus: '1'
-          memory: 2G
-        reservations:
-          memory: 1500M
     networks:
       - appnet
 

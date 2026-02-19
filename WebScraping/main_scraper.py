@@ -256,7 +256,6 @@ def main():
         
         return
     
-    # MODALITÀ NORMALE (originale)
     print("📊 Recupero dati dal box office...")
     boxoffice_data = get_boxoffice_data_with_titles(max_films=10, use_cache=True)
     print(f"✓ Trovati {len(boxoffice_data)} film")

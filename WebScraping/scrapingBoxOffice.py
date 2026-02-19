@@ -39,7 +39,6 @@ def clean_number(s: str) -> float:
 def scrape_boxoffice_data(use_cache: bool = True):
     """
     Scarica i dati dal box office e ritorna lista di dizionari.
-    Se use_cache=True e il file cache esiste, usa quello invece di fare scraping.
     """
     # Controlla se esiste la cache
     if use_cache and os.path.exists(CACHE_FILE):
@@ -98,7 +97,6 @@ def scrape_boxoffice_data(use_cache: bool = True):
 
         browser.close()
         
-        # Salva nella cache
         with open(CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
         print(f"💾 Dati salvati in cache: {CACHE_FILE}")

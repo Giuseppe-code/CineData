@@ -10,7 +10,7 @@ Se lo si desidera è possibile scegliere personalmente un film da analizzare.
 
 ---
 
-## 🎯 A chi serve
+## 🎯 Utenti finali
 
 - **Cinefili** — scopri quali film eccellono per regia, fotografia, storia o emozioni, non solo per il botteghino
 - **Giornalisti cinematografici** — dati aggregati e tendenze in tempo reale per supportare articoli e recensioni

@@ -1,9 +1,9 @@
 .myenv
 /elasticsarch
 /data
-models/quickcheck_model/*.bin
-models/quickcheck_model/*.safetensors
-models/quickcheck_model/*.pt
+models/cinedata_bert_film/*.bin
+models/cinedata_bert_film/*.safetensors
+models/cinedata_bert_film/*.pt
 
 WebScraping/cache/
 

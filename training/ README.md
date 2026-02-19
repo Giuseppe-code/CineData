@@ -4,6 +4,7 @@ Fine-tuning di `bert-base-uncased` sul dataset
 [Lowerated/imdb-reviews-rated](https://huggingface.co/datasets/Lowerated/imdb-reviews-rated)
 per predire 7 aspetti qualitativi di film.
 
+Puoi scaricare il modello già pronto o effettuare tu il training.
 ## Output labels
 
 | Label | Descrizione |
@@ -15,6 +16,22 @@ per predire 7 aspetti qualitativi di film.
 | `emotions` | Impatto emotivo |
 | `characters` | Personaggi |
 | `production_design` | Design produzione |
+
+
+
+## Download modello pre-trainato
+
+Il modello è disponibile su HuggingFace:
+```bash
+python -c "
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id='Giusex04/cinedata-bert-film-aspects',
+    local_dir='../models/cinedata-bert-film'
+)
+"
+```
+
 
 ## Installazione
 ```bash
@@ -43,17 +60,4 @@ python finetune_lowerated_bert_pytorch.py \
   --fp16 \
   --max_train_samples 4000 \
   --max_eval_samples 500
-```
-
-## Download modello pre-trainato
-
-Il modello è disponibile su HuggingFace:
-```bash
-python -c "
-from huggingface_hub import snapshot_download
-snapshot_download(
-    repo_id='Giusex04/cinedata-bert-film-aspects',
-    local_dir='./models/cinedata-bert-film'
-)
-"
 ```

@@ -2,9 +2,9 @@
 
 > *«Che film scelgo?»* 
 
-**CineData** è una piattaforma di analisi cinematografica in tempo reale pensata per cinefili, giornalisti cinematografici e direttori di sala che vogliono andare oltre il semplice voto e capire davvero cosa rende un film memorabile.
+**CineData** è una piattaforma di analisi cinematografica in tempo reale pensata per cinefili, giornalisti cinematografici e direttori di sala che vogliono analizzare le ultime uscite e le ultime tendenze nel panorama cinematografico.
 
-Raccoglie automaticamente i top10 film più visti al cinema italiano (Box Office Cinetel) e le relative recensioni da IMDb, le arricchisce con un'analisi degli aspetti cinematografici tramite un modello BERT fine-tunato, e le rende esplorabili attraverso dashboard interattive su Kibana.
+Una volta avviato raccoglie i top10 film più visti al cinema italiano (Box Office Cinetel) e le relative recensioni da IMDb, le arricchisce con un'analisi degli aspetti cinematografici tramite un modello BERT fine-tunato, e le rende esplorabili attraverso dashboard interattive su Kibana.
 
 Se lo si desidera è possibile scegliere personalmente un film da analizzare.
 
@@ -41,9 +41,9 @@ Se lo si desidera è possibile scegliere personalmente un film da analizzare.
 
 ## 🤖 Il Modello BERT
 
-Il cuore del progetto è un modello **BERT fine-tunato per regressione multi-output** sul dataset [Lowerated/imdb-reviews-rated](https://huggingface.co/datasets/Lowerated/imdb-reviews-rated).
+Il progetto usa un modello **BERT fine-tunato per regressione multi-output** sul dataset [Lowerated/imdb-reviews-rated](https://huggingface.co/datasets/Lowerated/imdb-reviews-rated).
 
-Dato il testo di una recensione, predice 7 score continui:
+Dato il testo di una recensione, predice 7 score:
 
 | Aspetto | Descrizione |
 |---------|-------------|
@@ -55,7 +55,7 @@ Dato il testo di una recensione, predice 7 score continui:
 | `characters` | Profondità dei personaggi |
 | `production_design` | Qualità della produzione |
 
-Ogni recensione raccolta viene arricchita da questi score e resa disponibile su Kibana per analisi aggregate per film, genere e distribuzione geografica.
+Ogni recensione raccolta viene arricchita da questi score e resa disponibile su Kibana.
 
 ---
 
@@ -91,7 +91,7 @@ docker compose run --rm scraping python main_scraper.py --demo tt0133093  --titl
 
 ### Importa le dashboard Kibana
 
-vai su **Kibana → Stack Management → Saved Objects → Import** e carica il file `scripts/kibana-export.ndjson` incluso nel repository.
+vai su **Kibana → Stack Management → Saved Objects → Import** e carica il file `scripts/export.ndjson` incluso nel repository.
 
 ---
 

@@ -11,7 +11,13 @@ done
 echo "Waiting for Elasticsearch plugin to be loaded..."
 until curl -sf "$CONNECT_URL/connector-plugins" | grep -q "ElasticsearchSinkConnector"; do
   echo "Plugin not yet available..."
-  sleep 5
+  sleep 15
+done
+
+echo "Waiting for Elasticsearch to be ready..."
+until curl -sf "http://elasticsearch:9200/_cluster/health" > /dev/null; do
+  echo "Elasticsearch not ready yet..."
+  sleep 15
 done
 
 echo "Plugin ready! Registering connector..."

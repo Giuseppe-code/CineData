@@ -5,7 +5,6 @@ services:
     build: 
       context: ./WebScraping
     volumes:
-      # Mappa la cartella locale per persistere i cache
       - ./WebScraping/cache:/app/cache
     environment:
       - BOXOFFICE_SINK_URL=http://fluentbit:9880/topBoxOffice

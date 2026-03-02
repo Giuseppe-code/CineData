@@ -18,8 +18,8 @@ Se lo si desidera è possibile scegliere personalmente un film da analizzare.
 
 ---
 ## Preview
-
-
+![Dashboard](Presentazione/Asset_1.jpg)
+![Dashboard](Presentazione/Asset_2.jpg)
 ---
 ## 🏗️ Struttura
 
@@ -92,6 +92,9 @@ docker compose run --rm scraping python main_scraper.py --demo tt0133093  --titl
 ### Importa le dashboard Kibana
 
 vai su **Kibana → Stack Management → Saved Objects → Import** e carica il file `scripts/export.ndjson` incluso nel repository.
+
+### Riutilizzo
+Se vuoi caricare il nuovo bollettino di Cinetel cancella `cache/boxoffice_cache.json` e riavvia lo scraping (il bollettino è giornaliero)
 
 ---
 

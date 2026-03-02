@@ -17,26 +17,24 @@ Puoi scaricare il modello già pronto o effettuare tu il training.
 | `characters` | Personaggi |
 | `production_design` | Design produzione |
 
-
+## Installazione dei requirements
+```bash
+pip install -r requirements_training.txt
+```
 
 ## Download modello pre-trainato
 
-Il modello è disponibile su HuggingFace:
+Ora puoi scaricare il modello da HuggingFace:
 ```bash
 python -c "
 from huggingface_hub import snapshot_download
 snapshot_download(
     repo_id='Giusex04/cinedata-bert-film-aspects',
-    local_dir='../models/cinedata-bert-film'
+    local_dir='../models/cinedata_bert_film'
 )
 "
 ```
 
-
-## Installazione
-```bash
-pip install -r requirements_training.txt
-```
 
 ## Training completo
 ```bash
